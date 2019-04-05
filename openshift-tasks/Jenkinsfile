@@ -46,7 +46,7 @@ podTemplate(
       // Do not run tests in this step
       stage('Build war') {
         echo "Building version ${devTag}"
-        sh "cd openshift-task/ && ${mvnCmd} clean package -DskipTests=true"
+        sh "${mvnCmd} clean package -DskipTests=true"
       }
 
       // TBD: The next two stages should run in parallel
