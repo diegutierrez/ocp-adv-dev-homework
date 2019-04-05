@@ -17,11 +17,11 @@ podTemplate(
   node('skopeo-pod') {
     // Define Maven Command to point to the correct
     // settings for our Nexus installation
-    def mvnCmd = "mvn -s nexus_settings.xml"
+    def mvnCmd = "mvn -s ../nexus_settings.xml"
 
     // Set Development and Production Project Names
-    def devProject  = "6193-tasks-dev"
-    def prodProject = "6193-tasks-prod"
+    def devProject  = "${GUID}-tasks-dev"
+    def prodProject = "${GUID}-tasks-prod"
 
     // Checkout Source Code.
     stage('Checkout Source') {
