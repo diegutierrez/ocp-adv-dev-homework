@@ -56,25 +56,18 @@ podTemplate(
       // TBD: The next two stages should run in parallel
 
       // Using Maven run the unit tests
-      stage('Unit Tests') {
-        echo "Running Unit Tests"
-
-        steps {
-          echo "Running Unit Tests"
-          sh "${mvnCmd} test"
-          step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
-        }
-      }
-
-      // Using Maven to call SonarQube for Code Analysis
-      stage('Code Analysis') {
-        echo "Running Code Analysis"
-        steps {
-          script {
-            echo "Running Code Analysis"
-            sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube-gpte-hw-cicd.apps.na311.openshift.opentlc.com -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
-          }
-        }
+      stage('Unit Tests & Code Analysis') {
+        parallel(
+            a:{
+              echo "Running Unit Tests"
+              sh "${mvnCmd} test"
+              step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
+            },
+            b:{
+              echo "Running Code Analysis"
+              sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube-gpte-hw-cicd.apps.na311.openshift.opentlc.com -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
+            }
+          )
       }
 
       // Publish the built war file to Nexus
@@ -92,16 +85,11 @@ podTemplate(
         echo "Building OpenShift container image tasks:${devTag}"
 
         steps {
-          echo "Building OpenShift container image tasks:${devTag}"
-
-          // Start Binary Build in OpenShift using the file we just published
-          // The filename is openshift-tasks.war in the 'target' directory of your current
-          // Jenkins workspace
           script {
             openshift.withCluster() {
               openshift.withProject("${devProject}") {
-                openshift.selector("bc", "openshift-tasks").startBuild("--from-file=./target/openshift-tasks.war", "--wait=true")
-                openshift.tag("openshift-tasks:latest", "openshift-tasks:${devTag}") 
+                openshift.selector("bc", "tasks").startBuild("--from-file=./target/openshift-tasks.war", "--wait=true")
+                openshift.tag("tasks:latest", "tasks:${devTag}") 
               }
             }
           }
@@ -122,12 +110,13 @@ podTemplate(
                 openshift.selector('configmap', 'tasks-config').delete()
                 def configmap = openshift.create('configmap', 'tasks-config', '--from-file=./configuration/application-users.properties', '--from-file=./configuration/application-roles.properties' )
 
-                openshift.selector("dc", "openshift-tasks").rollout().latest();
+                openshift.selector("dc", "tasks").rollout().latest();
                 
-                def dc = openshift.selector("dc", "openshift-tasks").object()
+                def dc = openshift.selector("dc", "tasks").object()
                 while (dc.spec.replicas != dc.status.availableReplicas) {
                   echo "Replicas: ${dc.status.availableReplicas}, Desired: ${dc.spec.replicas}"
                   sleep 1
+                  dc = openshift.selector("dc", "tasks").object()
                 }
               }
             }
@@ -142,11 +131,11 @@ podTemplate(
         steps {
           echo "Copy image to Nexus Docker Registry"
           script {
-            sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:redhat docker://docker-registry.default.svc.cluster.local:5000/${devProject}/openshift-tasks:${devTag} docker://nexus3-gpte-hw-cicd.apps.na311.openshift.opentlc.com/repository/docker/openshift-tasks:${devTag}"
+            sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:redhat docker://docker-registry.default.svc.cluster.local:5000/${devProject}/tasks:${devTag} docker://nexus3-gpte-hw-cicd.apps.na311.openshift.opentlc.com/repository/docker/tasks:${devTag}"
 
             openshift.withCluster() {
               openshift.withProject("${prodProject}") {
-                openshift.tag("${devProject}/openshift-tasks:${devTag}", "${devProject}/openshift-tasks:${prodTag}")
+                openshift.tag("${devProject}/tasks:${devTag}", "${devProject}/tasks:${prodTag}")
               }
             }
           }
@@ -163,7 +152,7 @@ podTemplate(
           script {
             openshift.withCluster() {
               openshift.withProject("${prodProject}") {
-                activeApp = openshift.selector("route", "openshift-tasks").object().spec.to.name
+                activeApp = openshift.selector("route", "tasks").object().spec.to.name
                 if (activeApp == "tasks-green") {
                   destApp = "tasks-blue"
                 }
@@ -172,7 +161,7 @@ podTemplate(
 
                 // Update the Image on the Production Deployment Config
                 def dc = openshift.selector("dc/${destApp}").object()
-                dc.spec.template.spec.containers[0].image="docker-registry.default.svc:5000/${devProject}/openshift-tasks:${prodTag}"
+                dc.spec.template.spec.containers[0].image="docker-registry.default.svc:5000/${devProject}/tasks:${prodTag}"
                 openshift.apply(dc)
 
                 // Update Config Map in change config files changed in the source
@@ -186,6 +175,7 @@ podTemplate(
                 while (dc.spec.replicas != dc.status.availableReplicas) {
                   echo "Replicas: ${dc.status.availableReplicas}, Desired: ${dc.spec.replicas}"
                   sleep 1
+                  dc = openshift.selector("dc/${destApp}").object()
                 }
               }
             }
