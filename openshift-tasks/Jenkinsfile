@@ -1,3 +1,4 @@
+def GUID="d919"
 podTemplate(
   label: "skopeo-pod",
   cloud: "openshift",
@@ -5,7 +6,7 @@ podTemplate(
   containers: [
     containerTemplate(
       name: "jnlp",
-      image: "docker-registry.default.svc:5000/d919-jenkins/jenkins-agent-appdev",
+      image: "docker-registry.default.svc:5000/${GUID}-jenkins/jenkins-agent-appdev",
       resourceRequestMemory: "1Gi",
       resourceLimitMemory: "2Gi",
       resourceRequestCpu: "1",
@@ -19,8 +20,8 @@ podTemplate(
     def mvnCmd = "mvn -s ../nexus_settings.xml"
 
     // Set Development and Production Project Names
-    def devProject  = "d919-tasks-dev"
-    def prodProject = "d919-tasks-prod"
+    def devProject  = "${GUID}-tasks-dev"
+    def prodProject = "${GUID}-tasks-prod"
 
     // Checkout Source Code.
     stage('Checkout Source') {
@@ -68,7 +69,7 @@ podTemplate(
       // Publish the built war file to Nexus
       stage('Publish to Nexus') {
         echo "Publish to Nexus"
-        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3-gpte-hw-cicd.apps.na311.openshift.opentlc.com/repository/maven-releases/"
+        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3-gpte-hw-cicd.apps.na311.openshift.opentlc.com/repository/releases"
       }
 
       // Build the OpenShift Image in OpenShift and tag it.
