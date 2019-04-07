@@ -1,4 +1,4 @@
-def GUID="d919"
+def GUID="0530"
 podTemplate(
   label: "skopeo-pod",
   cloud: "openshift",
