@@ -143,6 +143,7 @@ podTemplate(
               // Update the Image on the Production Deployment Config
               def dc = openshift.selector("dc/${destApp}").object()
               dc.spec.template.spec.containers[0].image="docker-registry.default.svc:5000/${devProject}/tasks:${prodTag}"
+              dc.spec.template.spec.containers[0].env[0].value="${prodTag} (${destApp})"
               openshift.apply(dc)
 
               // Update Config Map in change config files changed in the source
@@ -153,10 +154,14 @@ podTemplate(
               openshift.selector("dc", "${destApp}").rollout().latest();
 
               // Wait for application to be deployed
+              def dc_prod = openshift.selector("dc", "${destApp}").object()
+              def dc_version = dc_prod.status.latestVersion
+              def rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
+              
               while (dc.spec.replicas != dc.status.availableReplicas) {
                 echo "Replicas: ${dc.status.availableReplicas}, Desired: ${dc.spec.replicas}"
-                sleep 1
-                dc = openshift.selector("dc/${destApp}").object()
+                sleep 5
+                rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
               }
             }
           }
