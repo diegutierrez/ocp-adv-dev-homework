@@ -158,7 +158,7 @@ podTemplate(
               def dc_version = dc_prod.status.latestVersion
               def rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
               
-              while (dc.spec.replicas != dc.status.availableReplicas) {
+              while (rc_prod.spec.replicas != rc_prod.status.readyReplicas) {
                 echo "Replicas: ${dc.status.availableReplicas}, Desired: ${dc.spec.replicas}"
                 sleep 5
                 rc_prod = openshift.selector("rc", "${destApp}-${dc_version}").object()
